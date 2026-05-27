@@ -1,1 +1,35 @@
-
+{
+  "dataset": "11CLS",
+  "summary": {
+    "train": 204,
+    "test": 75,
+    "total": 279,
+    "classes": 11,
+    "ports": 5,
+    "regions": 2
+  },
+  "class_distribution": {
+    "US-CV63_KittyHawk": 18,
+    "US-CV65_Enterprise": 6,
+    "US-CVN71_Roosevelt": 9,
+    "US-CVN72_Lincoln": 6,
+    "US-CVN73_Washington": 13,
+    "US-CVN76_Reagan": 16,
+    "US-LHA6_America": 28,
+    "US-LHD1_Wasp": 29,
+    "US-LHD2_Essex": 27,
+    "US-LHD5_Bataan": 37,
+    "US-LHD7_IwoJima": 15
+  },
+  "port_distribution": {
+    "san diego naval base": 95,
+    "norfolk naval base": 52,
+    "bremerton base": 21,
+    "North Island Naval Air Station": 21,
+    "Norfolk Dockyard 1": 15
+  },
+  "region_distribution": {
+    "US West Pacific": 137,
+    "US East Coast": 67
+  }
+}
