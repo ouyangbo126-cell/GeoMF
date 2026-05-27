@@ -1,35 +1,75 @@
 {
   "dataset": "11CLS",
-  "summary": {
-    "train": 204,
-    "test": 75,
-    "total": 279,
+  "train": {
+    "total": 204,
     "classes": 11,
     "ports": 5,
-    "regions": 2
+    "regions": 2,
+    "class_distribution": {
+      "US-CV63_KittyHawk": 18,
+      "US-CV65_Enterprise": 6,
+      "US-CVN71_Roosevelt": 9,
+      "US-CVN72_Lincoln": 6,
+      "US-CVN73_Washington": 13,
+      "US-CVN76_Reagan": 16,
+      "US-LHA6_America": 28,
+      "US-LHD1_Wasp": 29,
+      "US-LHD2_Essex": 27,
+      "US-LHD5_Bataan": 37,
+      "US-LHD7_IwoJima": 15
+    },
+    "port_distribution": {
+      "san diego naval base": 95,
+      "norfolk naval base": 52,
+      "bremerton base": 21,
+      "North Island Naval Air Station": 21,
+      "Norfolk Dockyard 1": 15
+    },
+    "region_distribution": {
+      "US West Pacific": 137,
+      "US East Coast": 67
+    }
   },
-  "class_distribution": {
-    "US-CV63_KittyHawk": 18,
-    "US-CV65_Enterprise": 6,
-    "US-CVN71_Roosevelt": 9,
-    "US-CVN72_Lincoln": 6,
-    "US-CVN73_Washington": 13,
-    "US-CVN76_Reagan": 16,
-    "US-LHA6_America": 28,
-    "US-LHD1_Wasp": 29,
-    "US-LHD2_Essex": 27,
-    "US-LHD5_Bataan": 37,
-    "US-LHD7_IwoJima": 15
+  "val": {
+    "total": 75,
+    "classes": 11,
+    "ports": 9,
+    "regions": 4,
+    "class_distribution": {
+      "US-CV63_KittyHawk": 2,
+      "US-CV65_Enterprise": 7,
+      "US-CVN71_Roosevelt": 5,
+      "US-CVN72_Lincoln": 1,
+      "US-CVN73_Washington": 8,
+      "US-CVN76_Reagan": 6,
+      "US-LHA6_America": 9,
+      "US-LHD1_Wasp": 20,
+      "US-LHD2_Essex": 2,
+      "US-LHD5_Bataan": 10,
+      "US-LHD7_IwoJima": 5
+    },
+    "port_distribution": {
+      "pearl harbor 2": 30,
+      "Yokosuka": 13,
+      "newport news shipyard": 9,
+      "Sasebo Base": 9,
+      "Everett": 5,
+      "mayport base": 5,
+      "Pearl Harbor 1": 2,
+      "Changi": 1,
+      "Busan Naval Base": 1
+    },
+    "region_distribution": {
+      "US West Pacific": 37,
+      "East Asia": 23,
+      "US East Coast": 14,
+      "Indian SE Asia": 1
+    }
   },
-  "port_distribution": {
-    "san diego naval base": 95,
-    "norfolk naval base": 52,
-    "bremerton base": 21,
-    "North Island Naval Air Station": 21,
-    "Norfolk Dockyard 1": 15
-  },
-  "region_distribution": {
-    "US West Pacific": 137,
-    "US East Coast": 67
+  "summary": {
+    "total": 279,
+    "train_ports": 5,
+    "val_ports": 9,
+    "all_ports": 14
   }
 }
