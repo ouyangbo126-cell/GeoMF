@@ -8,15 +8,15 @@ import random
 import math
 import torch
 from torch.utils.data import Dataset
-import ast  # 用于安全地解析字符串为列表
+import ast  # Safely parse the string as a list.
 
 
 def meters_to_degrees_lat(meters, lat):
-    """将米转换为纬度的度数（与纬度相关）"""
+    """Convert meters to degrees of latitude."""
     return meters / 111320.0
 
 def meters_to_degrees_lon(meters, lat):
-    """将米转换为经度的度数（与纬度和经度相关）"""
+    """Convert meters to degrees of longitude at the given latitude."""
     return meters / (111320.0 * math.cos(math.radians(lat)))
 
 
@@ -27,7 +27,7 @@ class GeoShipDataset(Dataset):
         self.args = args
         self.split = split
         self.transform = transform
-        # 地理坐标随机噪声 sigma（米），sigma=0 表示不添加噪声
+        # Coordinate noise standard deviation in meters. A value of zero disables noise.
         if args is not None and hasattr(args, 'DATA') and hasattr(args.DATA, 'SIGMA'):
             self.sigma = args.DATA.SIGMA
         else:
@@ -37,11 +37,11 @@ class GeoShipDataset(Dataset):
         self.root_dir = root_dir
         self.img_dir = os.path.join(root_dir, split)
         
-        # 自动检测数据集类型
+        # Detect the dataset type automatically.
         self.is_inat = False
         self.json_data = None
         
-        # 检测是否为 iNaturalist 数据集
+        # Check whether the dataset is iNaturalist.
         inat_json = os.path.join(root_dir, f"{split}_mini.json")
         if not os.path.exists(inat_json):
             inat_json = os.path.join(root_dir, f"val.json") if split == 'val' else None
@@ -62,30 +62,30 @@ class GeoShipDataset(Dataset):
             self._init_rascd()
 
     def _init_inat(self):
-        """初始化 iNaturalist 数据集"""
+        """Initialize the iNaturalist dataset."""
         self.json_dir = None
         self.text_jsonl = None
         self.feature_dict = {}
         
-        # 构建 id -> info 映射
+        # Map image IDs to metadata.
         self.id_to_info = {img['id']: img for img in self.json_data['images']}
         
         print(f"[GeoShipDataset] Scanning train directory...")
-        # 从 train 目录获取类别（按字母顺序，与 ImageFolder 一致）
+        # Read class names from the train directory in ImageFolder alphabetical order.
         class_dirs = sorted(os.listdir(self.img_dir))
         self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(class_dirs)}
-        class_set = set(class_dirs)  # 用于快速查找
+        class_set = set(class_dirs)  # Store entries for fast lookup.
         
         print(f"[GeoShipDataset] Building image index ({len(self.json_data['images'])} images)...")
-        # 构建 id -> label 映射（优化：直接从路径中提取目录名）
+        # Map image IDs to labels using the class directory from each path.
         self.filename_to_label = {}
         for img_info in self.json_data['images']:
             file_name = img_info['file_name']
-            # file_name 格式: train_mini/00000_Animalia_.../abc.jpg
-            # 或: train/00000_Animalia_.../abc.jpg
+            # file_name format: train_mini/00000_Animalia_.../abc.jpg
+            # Alternate format: train/00000_Animalia_.../abc.jpg
             parts = file_name.replace('train_mini/', 'train/').split('/')
             if len(parts) >= 2:
-                dir_name = parts[-2]  # 取倒数第二个部分（目录名）
+                dir_name = parts[-2]  # Use the second-to-last path component as the directory name.
                 if dir_name in class_set:
                     self.filename_to_label[img_info['id']] = self.class_to_idx[dir_name]
         
@@ -97,7 +97,7 @@ class GeoShipDataset(Dataset):
         print(f"[GeoShipDataset] Loaded {len(self.samples)} samples")
 
     def _init_rascd(self):
-        """初始化 RASCD 数据集"""
+        """Initialize the RASCD dataset."""
         self.json_dir = os.path.join(self.root_dir, 'info')
         self.text_jsonl = os.path.join(self.root_dir, f"last/{self.split}.jsonl")
         self.feature_dict = self._load_feature_dict(self.text_jsonl)
@@ -135,7 +135,7 @@ class GeoShipDataset(Dataset):
         return img, text, label, metadata
 
 
-    # ------------- 辅助函数 (RASCD) -------------
+    # ------------- RASCD helper functions -------------
     def _load_feature_dict(self, path):
         feature_dict = {}
         if not os.path.exists(path):
@@ -161,8 +161,8 @@ class GeoShipDataset(Dataset):
             self._load_samples_rascd()
 
     def _load_samples_inat(self):
-        """加载 iNaturalist 样本（不检查文件是否存在）"""
-        # 预计算 config，只获取一次
+        """Load iNaturalist samples without checking whether files exist."""
+        # Read the configuration once before iterating.
         ebase, eoff, ediff, edist, edir, input_dim = self.regionpe_config()
         
         for img_id, info in self.id_to_info.items():
@@ -172,11 +172,11 @@ class GeoShipDataset(Dataset):
             label = self.filename_to_label[img_id]
             file_name = info['file_name']
             
-            # 修正路径：train_mini/xxx -> train/xxx
+            # Map train_mini/xxx paths to train/xxx.
             file_name = file_name.replace('train_mini/', 'train/')
             img_path = os.path.join(self.root_dir, file_name)
             
-            # 解析地理位置
+            # Parse the geographic coordinates.
             lat = info.get('latitude')
             lon = info.get('longitude')
             
@@ -185,7 +185,7 @@ class GeoShipDataset(Dataset):
             else:
                 port_lat, port_lon = lat, lon
             
-            # 直接调用 _encode_regionpe 避免重复获取 config
+            # Call _encode_regionpe directly to reuse the configuration.
             metadata = self._encode_regionpe(lat, lon, port_lat, port_lon, ebase, eoff, ediff, edist, edir, input_dim)
             self.samples.append((img_path, os.path.basename(file_name), label, metadata))
     
@@ -194,14 +194,14 @@ class GeoShipDataset(Dataset):
 
         geo_feature = []
 
-        # Ebase: 绝对粗坐标编码 (2 coords * 2 = 4 dims)
+        # Ebase: absolute coordinate encoding (2 coordinates x 2 = 4 dimensions)
         if ebase:
             coarse_tensor = torch.tensor([lat, lon], dtype=torch.float32)
             coarse_sin = torch.sin(torch.pi * coarse_tensor)
             coarse_cos = torch.cos(torch.pi * coarse_tensor)
             geo_feature.extend([coarse_sin, coarse_cos])
 
-        # Eoff: 多尺度相对偏移编码 (3 scales * 2 coords * 2 = 12 dims)
+        # Eoff: multiscale relative offsets (3 scales x 2 coordinates x 2 = 12 dimensions)
         if eoff:
             k = 0.1
             for _ in range(3):
@@ -219,7 +219,7 @@ class GeoShipDataset(Dataset):
         return torch.cat(geo_feature)
 
     def _load_samples_rascd(self):
-        """加载 RASCD 样本"""
+        """Load RASCD samples."""
         class_dirs = sorted(os.listdir(self.img_dir))
         self.class_to_idx = {cls_name: idx for idx, cls_name in enumerate(class_dirs)}
         
@@ -293,14 +293,14 @@ class GeoShipDataset(Dataset):
                     print(f"[Error] Failed to process {json_path}: {e}")
 
     def regionpe_config(self):
-        """获取当前启用的 RegionPE 组件，返回 (ebase, eoff, ediff, edist, edir) 和 input_dim"""
+        """Return the five enabled RegionPE component flags and the input dimension."""
         ebase = getattr(self.args, 'DATA', None) and getattr(self.args.DATA, 'REGION_PE_EBASE', True)
         eoff = getattr(self.args, 'DATA', None) and getattr(self.args.DATA, 'REGION_PE_EOFF', True)
         ediff = getattr(self.args, 'DATA', None) and getattr(self.args.DATA, 'REGION_PE_EDIFF', True)
         edist = getattr(self.args, 'DATA', None) and getattr(self.args.DATA, 'REGION_PE_EDIST', True)
         edir = getattr(self.args, 'DATA', None) and getattr(self.args.DATA, 'REGION_PE_EDIR', True)
         
-        # 计算 input_dim: 每个组件的维度
+        # Compute input_dim from the dimensions of the enabled components.
         # Ebase: 2 coords * 2 (sin+cos) = 4 dims
         # Eoff: 3 scales * 2 coords * 2 (sin+cos) = 12 dims
         # Ediff: 1 layer * 2 coords * 2 (sin+cos) = 4 dims
@@ -337,17 +337,17 @@ class GeoShipDataset(Dataset):
         return self._encode_regionpe(lat, lon, port_lat, port_lon, ebase, eoff, ediff, edist, edir, input_dim)
     
     def _encode_regionpe(self, lat, lon, port_lat, port_lon, ebase, eoff, ediff, edist, edir, input_dim):
-        """快速地理位置编码（不重复获取 config）"""
+        """Encode geographic coordinates using the supplied configuration."""
         geo_feature = []
 
-        # Ebase: 绝对粗坐标编码 (2 coords * 2 = 4 dims)
+        # Ebase: absolute coordinate encoding (2 coordinates x 2 = 4 dimensions)
         if ebase:
             coarse_tensor = torch.tensor([lat, lon], dtype=torch.float32)
             coarse_sin = torch.sin(torch.pi * coarse_tensor)
             coarse_cos = torch.cos(torch.pi * coarse_tensor)
             geo_feature.extend([coarse_sin, coarse_cos])
 
-        # Eoff: 多尺度相对偏移编码 (3 scales * 2 coords * 2 = 12 dims)
+        # Eoff: multiscale relative offsets (3 scales x 2 coordinates x 2 = 12 dimensions)
         if eoff:
             k = 0.1
             for _ in range(3):
@@ -359,7 +359,7 @@ class GeoShipDataset(Dataset):
                 geo_feature.extend([fine_sin, fine_cos])
                 k *= 10
 
-        # Ediff: 偏移差值编码 (1 layer * 2 coords * 2 = 4 dims)
+        # Ediff: anchor-relative displacement (1 level x 2 coordinates x 2 = 4 dimensions)
         if ediff:
             lat_diff = lat - port_lat
             lon_diff = lon - port_lon
@@ -371,7 +371,7 @@ class GeoShipDataset(Dataset):
             diff_cos = torch.cos(torch.pi * diff_tensor)
             geo_feature.extend([diff_sin, diff_cos])
 
-        # Edist: 距离编码 (2 dims)
+        # Edist: geodesic distance encoding (2 dimensions)
         if edist:
             distance_km = self.haversine_distance(lat, lon, port_lat, port_lon)
             distance_km = torch.tensor(distance_km/100, dtype=torch.float32)
@@ -380,7 +380,7 @@ class GeoShipDataset(Dataset):
             distance_tensor = torch.tensor([distance_sin, distance_cos], dtype=torch.float32)
             geo_feature.append(distance_tensor)
 
-        # Edir: 方位角编码 (2 dims)
+        # Edir: bearing direction encoding (2 dimensions)
         if edir:
             bearing_deg = self.compute_bearing(port_lat, port_lon, lat, lon)
             bearing_rad = math.radians(bearing_deg)
@@ -395,8 +395,8 @@ class GeoShipDataset(Dataset):
 
     def compute_bearing(self, lat1, lon1, lat2, lon2):
         """
-        计算从 (lat1, lon1) 到 (lat2, lon2) 的方位角（bearing）
-        返回角度（度），范围为 [0, 360)
+        Compute the bearing from (lat1, lon1) to (lat2, lon2).
+        Return an angle in degrees in the range [0, 360).
         """
         lat1_rad = math.radians(lat1)
         lat2_rad = math.radians(lat2)
@@ -411,7 +411,7 @@ class GeoShipDataset(Dataset):
         return brng_deg
 
     def haversine_distance(self, lat1, lon1, lat2, lon2):
-        R = 6371.0  # 地球半径，单位 km
+        R = 6371.0  # Earth radius in kilometers
         phi1 = math.radians(lat1)
         phi2 = math.radians(lat2)
         d_phi = math.radians(lat2 - lat1)

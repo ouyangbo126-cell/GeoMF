@@ -24,7 +24,7 @@ class GSCM(nn.Module):
             nn.GELU()
         )
 
-        # 传入的 gnn_type 直接就是类了，比如 TransformerConv
+        # gnn_type is a layer class such as TransformerConv.
         GNNLayer = gnn_type
         self.gnn_layers = nn.ModuleList([
             GNNLayer(hidden_dim, hidden_dim) for _ in range(num_iters)
@@ -39,7 +39,7 @@ class GSCM(nn.Module):
         )
 
         if edge_index is None:
-            # 默认图结构
+            # Default graph structure
             self.register_buffer('edge_index', torch.tensor([
                 [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 21, 22, 23],
                 [19, 19, 19, 19, 20, 20, 20, 20, 20, 20, 21, 21, 22, 23, 23, 15, 23, 17, 24, 24, 24, 24, 24]
@@ -85,7 +85,7 @@ class HAFM(nn.Module):
         super().__init__()
         self.dim = dim
 
-        # 保存消融参数
+        # Store the ablation settings.
         self.use_cross_mlp = use_cross_mlp
         self.use_cross_mlp_num = use_cross_mlp_num
         self.use_se = use_se
@@ -94,7 +94,7 @@ class HAFM(nn.Module):
         self.use_meta = use_meta
         self.use_text = use_text
 
-        # 输入 LayerNorm
+        # Apply LayerNorm to the input.
         self.input_ln = nn.LayerNorm(dim)
 
         # -------- Cross MLP --------
@@ -136,11 +136,11 @@ class HAFM(nn.Module):
             self.gate_weight = nn.Parameter(torch.tensor(0.0))
             self.cond_proj = nn.Linear(2*dim, dim)
 
-        # -------- Bias Projection（始终存在）--------
+        # -------- Bias projection (always enabled) --------
         self.aux_proj = nn.Linear(dim, dim)
         self.out_ln = nn.LayerNorm(dim)
 
-        # 打印初始化参数
+        # Log the initialization settings.
         print("[HAFM] init with params:")
         print(f"  use_cross_mlp = {self.use_cross_mlp}")
         print(f"  use_cross_mlp_num = {self.use_cross_mlp_num}")
@@ -151,11 +151,11 @@ class HAFM(nn.Module):
         print(f"  use_text       = {self.use_text}")
 
     def _apply_acfu(self, fusion, aux):
-        # -------- Cross MLP 残差 --------
+        # -------- Cross-MLP residual connections --------
         if self.use_cross_mlp:
             fusion_cat = torch.cat([fusion, aux], dim=-1)
             for layer in self.cross_layers:
-                fusion_cat = fusion_cat + layer(fusion_cat)  # 每层残差
+                fusion_cat = fusion_cat + layer(fusion_cat)  # Add the residual at each layer.
             fusion_proj = self.cross_project(fusion_cat)
             alpha = torch.sigmoid(self.alpha_cross)
             fusion = (1 - alpha) * fusion + alpha * aux + fusion_proj
@@ -189,13 +189,13 @@ class HAFM(nn.Module):
     def forward(self, img, metadata, text):
         fusion = self.input_ln(img)
 
-        # 共享参数
+        # Reuse parameters across modalities.
         if self.use_meta == True:
             fusion = self._apply_acfu(fusion, metadata)
         if self.use_text == True:
             fusion = self._apply_acfu(fusion, text)
 
-        # Bias 投影
+        # Bias projection
         if self.use_meta == True:
             fusion = fusion + self.aux_proj(metadata) 
         if self.use_text == True:

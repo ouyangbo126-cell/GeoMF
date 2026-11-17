@@ -149,7 +149,7 @@ class FusionModule(nn.Module):
 
     def forward(self, img_fea, loc_fea):
         '''
-        img_fea: (N, channel), backbone输出经过全局池化的feature
+        img_fea: Globally pooled backbone features of shape (N, channel).
         loc_fea: (N, fea_dim)
         '''
         identity = img_fea
@@ -177,15 +177,15 @@ def get_dynamic_mlp(inplanes, args):
 class SAMLPUnit(nn.Module):
     def __init__(self, dim, hidden_dim):
         super(SAMLPUnit, self).__init__()
-        # 多头自注意力（可按需调整头数、替换实现）
+        # Multihead self-attention with configurable heads
         self.self_attention = nn.MultiheadAttention(dim, num_heads=4)  
-        # MLP 层（特征变换）
+        # MLP for feature transformation
         self.mlp = nn.Sequential(
             nn.Linear(dim, hidden_dim),
             nn.ReLU(),
             nn.Linear(hidden_dim, dim)
         )
-        # 前馈网络（强化特征）
+        # Feedforward network for feature refinement
         self.feed_forward = nn.Sequential(
             nn.Linear(dim, hidden_dim),
             nn.ReLU(),
@@ -193,30 +193,30 @@ class SAMLPUnit(nn.Module):
         )
 
     def forward(self, x):
-        x = x.unsqueeze(0)  # 变成 [1, batch_size, dim]
+        x = x.unsqueeze(0)  # Reshape to [1, batch_size, dim].
 
-        attn_output, _ = self.self_attention(x, x, x)  # 输出形状也是 [1, batch_size, dim]
+        attn_output, _ = self.self_attention(x, x, x)  # The output also has shape [1, batch_size, dim].
 
-        attn_out = attn_output + x  # 残差连接，形状一样
+        attn_out = attn_output + x  # Add the residual of the same shape.
 
-        attn_out = attn_out.squeeze(0)  # 去掉 seq_len 维度，变回 [batch_size, dim]
+        attn_out = attn_out.squeeze(0)  # Remove the sequence dimension to get [batch_size, dim].
 
-        # MLP + 残差
+        # MLP with a residual connection
         mlp_out = self.mlp(attn_out)
         mlp_res = mlp_out + attn_out  
 
-        # 前馈网络 + 残差
+        # Feedforward network with a residual connection
         ff_out = self.feed_forward(mlp_res)
         final_out = ff_out + mlp_res  
 
         return final_out
 
-# 封装重复4次的 SAMLP 模块
+# SAMLP module with four repetitions
 class SAMLP(nn.Module):
     def __init__(self, dim, hidden_dim, repeat_times=4):
         super(SAMLP, self).__init__()
         self.repeat_times = repeat_times
-        # 构建多个 SAMLP 单元（这里复用同一个单元，也可单独初始化）
+        # Build the SAMLP units. This version reuses one unit.
         self.samlp_units = nn.ModuleList([
             SAMLPUnit(dim, hidden_dim) for _ in range(repeat_times)
         ])
@@ -224,14 +224,14 @@ class SAMLP(nn.Module):
 
     def forward(self, x):
         for unit in self.samlp_units:
-            x = unit(x)  # 依次经过4次 SAMLP 单元处理
+            x = unit(x)  # Apply the SAMLP unit four times in sequence.
         #x = self.head(x)
         return x
 
 class DynamicFusionBlock(nn.Module):
     def __init__(self, dim=384, hidden_dim=512):
         super().__init__()
-        # 注意：使用你原本的 get_dynamic_mlp 动态注意力结构
+        # Reuse the dynamic attention from get_dynamic_mlp.
         self.loc_att = get_dynamic_mlp(dim, SimpleNamespace(
             mlp_d=32,
             mlp_h=hidden_dim,
@@ -239,7 +239,7 @@ class DynamicFusionBlock(nn.Module):
             mlp_type='c'
         ))
 
-        # 对融合后的图像特征做 MLP
+        # Apply an MLP to the fused image features.
         self.img_mlp = nn.Sequential(
             nn.Linear(dim, dim * 2),
             nn.GELU(),
@@ -250,7 +250,7 @@ class DynamicFusionBlock(nn.Module):
             nn.Linear(dim * 2, dim)
         )
 
-        # 对 loc_fea_proj 也加一个 MLP
+        # Apply an MLP to loc_fea_proj as well.
         self.loc_mlp = nn.Sequential(
             nn.Linear(32, 32 * 2),
             nn.GELU(),
@@ -262,9 +262,9 @@ class DynamicFusionBlock(nn.Module):
         )
 
     def forward(self, img_feat, loc_feat):
-        attn_output = self.loc_att(img_feat, loc_feat)  # 融合，shape: (B, D)
+        attn_output = self.loc_att(img_feat, loc_feat)  # Fuse the features into shape (B, D).
 
-        # 图像与loc特征分别进MLP
+        # Pass image and location features through separate MLPs.
         img_feat = self.img_mlp(attn_output)
         loc_feat = self.loc_mlp(loc_feat)
 
@@ -273,10 +273,10 @@ class DynamicFusionBlock(nn.Module):
 class LateFusionClassifier(nn.Module):
     def __init__(self, img_feat_dim=384, n_rounds=3):
         super().__init__()
-        # 多模态（经纬度）处理
+        # Process latitude and longitude features.
         #self.samlp = SAMLP(dim=24, hidden_dim=128, repeat_times=4)
         
-        # 后期融合模块，多轮动态注意力融合
+        # Late fusion with multiple rounds of dynamic attention
         self.fusion_blocks = nn.ModuleList([
             DynamicFusionBlock(dim=img_feat_dim) for _ in range(n_rounds)
         ])
@@ -284,15 +284,15 @@ class LateFusionClassifier(nn.Module):
 
     def forward(self, img_feat, metadata):
         """
-        img_feat: (B, D) 图像特征，B=batch size，D=img_feat_dim
-        metadata:  (B, 24) 经纬度等元信息
+        img_feat: Image features of shape (B, D) with batch size B and feature dimension D.
+        metadata: Geographic metadata of shape (B, 24), including latitude and longitude.
         """
         B = img_feat.size(0)
 
-        # 1. loc 特征提取 + 映射
+        # 1. Extract and project location features.
         #loc_feat = self.samlp(metadata)  # (B, 24)
         loc_feat = metadata
-        # 2. 多轮融合
+        # 2. Fuse the features over multiple rounds.
         for block in self.fusion_blocks:
             img_feat, loc_feat = block(img_feat, loc_feat)
 
@@ -307,7 +307,7 @@ class CrossModalFusionBlock(nn.Module):
         self.dim = dim
 
         # ------------------------
-        # 输入归一化
+        # Normalize the inputs.
         self.input_ln = nn.LayerNorm(dim)
 
         # ------------------------
@@ -320,23 +320,23 @@ class CrossModalFusionBlock(nn.Module):
             nn.MultiheadAttention(embed_dim=dim, num_heads=cross_attn_heads, batch_first=True)
             for _ in range(2)
         ])
-        # alpha 控制融合强弱
-        self.alpha_meta_cross = nn.Parameter(torch.tensor(0.0))    # metadata 强
-        self.alpha_text_cross = nn.Parameter(torch.tensor(-1.0))   # text 弱
+        # Alpha controls the fusion strength.
+        self.alpha_meta_cross = nn.Parameter(torch.tensor(0.0))    # Stronger metadata signal
+        self.alpha_text_cross = nn.Parameter(torch.tensor(-1.0))   # Weaker text signal
 
         # ------------------------
-        # FiLM 条件调制
+        # FiLM conditioning
         self.film_scale = nn.Linear(2*dim, dim)
         self.film_shift = nn.Linear(2*dim, dim)
         self.film_weight = nn.Parameter(torch.tensor(0.0))
 
         # ------------------------
-        # 动态 SE
+        # Dynamic SE
         self.se_fc1 = nn.Linear(3*dim, dim//2)
         self.se_fc2 = nn.Linear(dim//2, dim)
 
         # ------------------------
-        # 条件 FFN
+        # Conditional FFN
         self.ffn_ln = nn.LayerNorm(dim)
         self.ffn = nn.Sequential(
             nn.Linear(dim, ff_mult*dim),
@@ -348,14 +348,14 @@ class CrossModalFusionBlock(nn.Module):
         self.gate_weight = nn.Parameter(torch.tensor(0.0))
 
         # ------------------------
-        # Bias 投影
+        # Bias projection
         self.meta_proj = nn.Linear(dim, dim)
         self.text_proj = nn.Linear(dim, dim)
 
         # Attention pooling
         self.pool_query = nn.Parameter(torch.randn(1,1,dim))
 
-        # 输出归一化
+        # Normalize the output.
         self.out_ln = nn.LayerNorm(dim)
 
     def forward(self, img, metadata, text):
@@ -363,7 +363,7 @@ class CrossModalFusionBlock(nn.Module):
         fusion = self.input_ln(img)
 
         # ------------------------
-        # Cross-Attention: metadata (主辅助信号)
+        # Cross-attention with metadata as the primary auxiliary signal
         meta_exp = metadata.unsqueeze(1).expand(-1, N, -1)
         query = fusion
         key = value = meta_exp
@@ -375,7 +375,7 @@ class CrossModalFusionBlock(nn.Module):
         fusion = (1-alpha_meta)*query + alpha_meta*fusion
 
         # ------------------------
-        # Cross-Attention: text (弱辅助信号)
+        # Cross-attention with text as the weaker auxiliary signal
         text_exp = text.unsqueeze(1).expand(-1, N, -1)
         query = fusion
         key = value = text_exp
@@ -387,7 +387,7 @@ class CrossModalFusionBlock(nn.Module):
         fusion = (1-alpha_text)*query + alpha_text*fusion
 
         # ------------------------
-        # 动态 SE
+        # Dynamic SE
         fusion_mean = fusion.mean(dim=1)                        # [B,D]
         se_input = torch.cat([fusion_mean, metadata, text], dim=-1)  # [B,3D]
         se = F.relu(self.se_fc1(se_input))
@@ -395,7 +395,7 @@ class CrossModalFusionBlock(nn.Module):
         fusion = fusion * se
 
         # ------------------------
-        # FiLM 条件调制
+        # FiLM conditioning
         cond = torch.cat([metadata, text], dim=-1)             # [B,2D]
         scale = self.film_scale(cond).unsqueeze(1)
         shift = self.film_shift(cond).unsqueeze(1)
@@ -403,23 +403,23 @@ class CrossModalFusionBlock(nn.Module):
                  + torch.sigmoid(self.film_weight)*shift
 
         # ------------------------
-        # 条件 FFN + gate
+        # Conditional FFN with a gate
         attn_weights = torch.softmax(
             torch.matmul(fusion, self.pool_query.transpose(-1,-2)) / (D**0.5), dim=1
         )
         fusion_summary = (fusion * attn_weights).sum(dim=1)   # [B,D]
 
-        # cond 投影到 dim 保证维度一致
+        # Project cond to dim to match the feature dimension.
         cond_proj = nn.Linear(cond.shape[-1], D).to(fusion.device)(cond)
         gate = torch.sigmoid(self.ffn_gate(torch.cat([fusion_summary, cond_proj], dim=-1))).unsqueeze(1)
         fusion = fusion + torch.sigmoid(self.gate_weight)*gate*self.ffn(self.ffn_ln(fusion))
 
         # ------------------------
-        # Bias 注入
+        # Add the bias.
         fusion = fusion + self.meta_proj(metadata).unsqueeze(1)
         fusion = fusion + self.text_proj(text).unsqueeze(1)
 
-        # 输出归一化
+        # Normalize the output.
         fusion = self.out_ln(fusion)
         return fusion
 

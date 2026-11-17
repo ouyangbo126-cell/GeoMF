@@ -31,16 +31,16 @@ except:
 
 
 # =====================================================
-# === 核心修改部分 ===
+# Main changes
 # =====================================================
 def safe_get_rank():
-    """安全获取 rank（兼容单卡）"""
+    """Get the process rank with a single-GPU fallback."""
     if dist.is_available() and dist.is_initialized():
         return dist.get_rank()
     return 0
 
 def safe_get_world_size():
-    """安全获取 world_size（兼容单卡）"""
+    """Get the world size with a single-GPU fallback."""
     if dist.is_available() and dist.is_initialized():
         return dist.get_world_size()
     return 1
@@ -59,7 +59,7 @@ def build_loader(config):
     num_tasks = safe_get_world_size()
     global_rank = safe_get_rank()
 
-    # === 单卡 / 多卡兼容逻辑 ===
+    # Single-GPU and multi-GPU handling
     if num_tasks > 1:
         if config.DATA.ZIP_MODE and config.DATA.CACHE_MODE == 'part':
             indices = np.arange(global_rank, len(dataset_train), num_tasks)
@@ -76,7 +76,7 @@ def build_loader(config):
                 dataset_val, shuffle=config.TEST.SHUFFLE
             )
     else:
-        # 单 GPU 情况
+        # Single-GPU case
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
         sampler_val = torch.utils.data.SequentialSampler(dataset_val)
 

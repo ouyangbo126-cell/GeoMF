@@ -71,7 +71,7 @@ def load_pretrained_ema(config, model, logger, model_ema: ModelEma = None):
     if 'model' in checkpoint:
         state_dict = checkpoint['model']
 
-        # 删除分类头权重，比如参数名以 'head.' 开头
+        # Drop classifier weights such as parameters prefixed with 'head.'.
         keys_to_remove = [k for k in state_dict.keys() if k.startswith('head.')]
         for k in keys_to_remove:
             logger.info(f"Removing pretrained head weight: {k}")

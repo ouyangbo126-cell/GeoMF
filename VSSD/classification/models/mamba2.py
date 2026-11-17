@@ -355,26 +355,26 @@ class VMAMBA2Block(nn.Module):
         if H is None or W is None:
             H, W = self.input_resolution
 
-        # --- 保证 cpe1 只在图像 token 上用 ---
-        img_tokens, extra_tokens = x[:, :H*W, :], x[:, H*W:, :]   # 拆分
+        # --- Apply cpe1 only to image tokens ---
+        img_tokens, extra_tokens = x[:, :H*W, :], x[:, H*W:, :]   # Split the tokens.
 
         img_tokens = img_tokens + self.cpe1(
             img_tokens.reshape(B, H, W, C).permute(0, 3, 1, 2)
         ).flatten(2).permute(0, 2, 1)
 
-        # 再拼接回来
+        # Concatenate the tokens again.
         x = torch.cat([img_tokens, extra_tokens], dim=1)
 
         # --------------------------
         shortcut = x
         x = self.norm1(x)
 
-        # Attention可以看到额外token
+        # Attention includes the extra tokens.
         x = self.attn(x, H, W)
 
         x = shortcut + self.drop_path(x)
 
-        # --- 同理，cpe2 只作用在图像token ---
+        # --- Apply cpe2 only to image tokens ---
         img_tokens, extra_tokens = x[:, :H*W, :], x[:, H*W:, :]
 
         img_tokens = img_tokens + self.cpe2(
@@ -479,7 +479,7 @@ class GeoMFVSSD(nn.Module):
         patches_resolution = self.patch_embed.patches_resolution
         self.patches_resolution = patches_resolution
 
-        # loc_input_dim 用于 RegionPE 消融实验，默认为 24
+        # loc_input_dim controls RegionPE ablations and defaults to 24.
         self.loc = nn.Sequential(
             nn.Linear(loc_input_dim, 128),
             nn.GELU(),
@@ -487,7 +487,7 @@ class GeoMFVSSD(nn.Module):
             nn.Linear(128, 256),
             nn.GELU(),
             nn.Dropout(0.0),
-            nn.Linear(256, 256),   # 输出 256
+            nn.Linear(256, 256),   # Output dimension: 256
             nn.LayerNorm(256),
         )
         # Preserve module keys used in existing checkpoints.
@@ -495,7 +495,7 @@ class GeoMFVSSD(nn.Module):
             hidden_dim=256,
             num_nodes=25,
             num_iters=5,
-            num_classes=60,   # 输出 256
+            num_classes=60,   # Output dimension: 256
             gnn_type=TransformerConv,
             edge_index=None
         )
@@ -606,7 +606,7 @@ class GeoMFVSSD(nn.Module):
             nn.LayerNorm(384),
             nn.Linear(384, 10000)
         )
-        #对比算法模块定义
+        # Define the baseline modules.
         #Concat
         '''self.linear_fuse = nn.Linear(2 * 384, 384)'''
         
@@ -687,14 +687,14 @@ class GeoMFVSSD(nn.Module):
                      log_dir="./",
                      verbose=True):
         """
-        计算多模态模型参数量 (Params) 和 FLOPs
-        - fvcore：支持复杂模型（推荐）
-        - ptflops：对 CNN/Transformer 更精确，但只支持单模态
+        Count parameters and estimate FLOPs for the multimodal model.
+        - fvcore supports complex models and is the recommended option.
+        - ptflops gives more precise CNN and Transformer estimates for single-modality models.
         """
 
         model = model.eval().to(device)
 
-        # -------- 参数量 --------
+        # -------- Parameter count --------
         params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
         # -------- FLOPs --------
@@ -703,7 +703,7 @@ class GeoMFVSSD(nn.Module):
 
         if not use_ptflops:
             try:
-                # 包一层 Wrapper，给模型自动加 dummy meta/text 输入
+                # Wrap the model to supply dummy metadata and text inputs.
                 class Wrapper(torch.nn.Module):
                     def __init__(self, model):
                         super().__init__()
@@ -721,7 +721,7 @@ class GeoMFVSSD(nn.Module):
                 flops_analyzer = FlopCountAnalysis(wrapped_model, dummy_img)
                 flops = flops_analyzer.total()
 
-                # 打印 per-op 统计，方便定位算力消耗
+                # Print per-operator statistics to identify expensive operations.
                 if verbose:
                     print(flops_analyzer)
 
@@ -737,7 +737,7 @@ class GeoMFVSSD(nn.Module):
                 flops = 1e9
 
         else:
-            # 用 ptflops 更精确（对 CNN + Transformer 支持更好，但只支持单模态输入）
+            # ptflops gives more precise CNN and Transformer estimates for single-modality inputs.
             with torch.cuda.device(0):
                 macs, params_str = get_model_complexity_info(
                     model,
@@ -749,12 +749,12 @@ class GeoMFVSSD(nn.Module):
                 flops = macs  # MACs≈FLOPs
                 params = params_str
 
-        # -------- 输出 --------
+        # -------- Output --------
         if verbose:
             print(f"Params: {params/1e6:.2f} M")
             print(f"FLOPs: {flops/1e9:.2f} G (approx)")
 
-        # -------- 保存日志 --------
+        # -------- Save the log --------
         if warning_lines:
             os.makedirs(log_dir, exist_ok=True)
             log_path = os.path.join(log_dir, "flops_log.txt")
@@ -781,7 +781,7 @@ class GeoMFVSSD(nn.Module):
 
             mu_prime = torch.sigmoid(self.mu_param)
 
-            # 按 μ' 融合图像与元特征
+            # Blend image and metadata features with mu_prime.
             mix_feat = torch.cat([
                 mu_prime * img,
                 (1 - mu_prime) * metadata
@@ -798,7 +798,7 @@ class GeoMFVSSD(nn.Module):
         if self.f == 6:  # Samlp
             """
             img: [B, N, 768]
-            metadata: [B, D]  # 原始元数据向量
+            metadata: [B, D]  # Raw metadata vector
             """
             fusion = self.samlp(img, metadata)
         return fusion

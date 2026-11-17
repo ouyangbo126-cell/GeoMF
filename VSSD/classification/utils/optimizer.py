@@ -27,7 +27,7 @@ def build_optimizer(config, model, logger, fusion_lr_mult=5.0, **kwargs):
     if not kwargs.get('mute_repeat', False):
         logger.info(f"No weight decay list: {no_decay_names}")
 
-    # 分组参数
+    # Group parameters.
     fusion_params = []
     backbone_params = []
     for name, param in model.named_parameters():

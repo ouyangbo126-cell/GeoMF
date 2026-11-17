@@ -225,20 +225,20 @@ _C.TRAINCOST_MODE = False
 _C.FUSED_LAYERNORM = False
 
 # for abotion
-_C.TSNE = True   # 默认值
-_C.FUSION = CN()                 # 先定义 CN 节点
-_C.FUSION.NUM_FUSION = 1       # 默认融合层数
-_C.FUSION.USE_CROSS_MLP = True # 是否使用 Cross MLP
-_C.FUSION.USE_SE = True        # 是否使用 SE 模块
-_C.FUSION.USE_FILM = True      # 是否使用 FiLM
-_C.FUSION.USE_FFN = True       # 是否使用 FFN
-_C.FUSION.USE_CROSS_MLP_NUM = 1       # 是否使用 FFN
-_C.FUSION.USE_META = True      # 是否使用 FiLM
-_C.FUSION.USE_TEXT = True       # 是否使用 FFN
-_C.FUSION.USE_SIMPLE_MLP_FUSION = False  # 使用简单 MLP Fusion 替代 HAFM
+_C.TSNE = True   # Default value
+_C.FUSION = CN()                 # Define the config node first.
+_C.FUSION.NUM_FUSION = 1       # Default number of fusion blocks
+_C.FUSION.USE_CROSS_MLP = True # Enable the cross MLP.
+_C.FUSION.USE_SE = True        # Enable the SE module.
+_C.FUSION.USE_FILM = True      # Enable FiLM.
+_C.FUSION.USE_FFN = True       # Enable the FFN.
+_C.FUSION.USE_CROSS_MLP_NUM = 1       # Enable the FFN.
+_C.FUSION.USE_META = True      # Enable FiLM.
+_C.FUSION.USE_TEXT = True       # Enable the FFN.
+_C.FUSION.USE_SIMPLE_MLP_FUSION = False  # Use simple MLP fusion in place of HAFM.
 
 def _recursive_update_config_from_file(config, cfg_file):
-    # 不调用 freeze()，只做递归合并
+    # Merge recursively without calling freeze().
     with open(cfg_file, 'r') as f:
         yaml_cfg = yaml.load(f, Loader=yaml.FullLoader)
 
@@ -252,9 +252,9 @@ def _recursive_update_config_from_file(config, cfg_file):
 
 
 def update_config(config, args):
-    config.defrost()  # 解锁，准备修改
+    config.defrost()  # Unfreeze the configuration before editing.
 
-    _recursive_update_config_from_file(config, args.cfg)  # 递归合并 config 文件
+    _recursive_update_config_from_file(config, args.cfg)  # Merge configuration files recursively.
 
     if args.opts:
         config.merge_from_list(args.opts)
@@ -262,7 +262,7 @@ def update_config(config, args):
     def _check_args(name):
         return hasattr(args, name) and bool(getattr(args, name))
 
-    # 下面覆盖命令行参数到配置
+    # Apply command-line overrides.
     if _check_args('batch_size'):
         config.DATA.BATCH_SIZE = args.batch_size
     if _check_args('data_path'):
@@ -335,13 +335,13 @@ def update_config(config, args):
         config.DATA.REGION_PE_EDIST = args.region_pe_edist
     if hasattr(args, 'region_pe_edir'):
         config.DATA.REGION_PE_EDIR = args.region_pe_edir
-    # 拼接 output 目录
+    # Build the output directory path.
     config.OUTPUT = os.path.join(config.OUTPUT, config.MODEL.NAME, config.TAG)
 
-    config.freeze()  # 最后锁定配置，不允许修改
+    config.freeze()  # Freeze the final configuration.
 
 
 def get_config(args):
-    config = _C.clone()  # 复制默认配置，避免修改全局
+    config = _C.clone()  # Copy the defaults before applying overrides.
     update_config(config, args)
     return config

@@ -63,17 +63,17 @@ def load_pretrained_ema(config, model, logger, model_ema=None):
         checkpoint = torch.load(config.MODEL.PRETRAINED, map_location='cpu')
         state_dict = checkpoint['model']
 
-        # 移除分类头参数
+        # Remove classifier-head parameters.
         head_keys = [k for k in state_dict.keys() if 'classifier.head' in k or 'head.' in k]
         for k in head_keys:
             logger.info(f"Removing head key from pretrained weights: {k}")
             del state_dict[k]
 
-        # 加载 backbone 权重
+        # Load the backbone weights.
         msg = model.load_state_dict(state_dict, strict=False)
         logger.info(f"=> Loaded pretrained weights (except head). Missing keys: {msg.missing_keys}")
 
-        # EMA 同步（针对 timm ModelEmaV2）
+        # Synchronize EMA for timm ModelEmaV2.
         if model_ema is not None:
             if hasattr(model_ema, '_load_state_dict'):
                 model_ema._load_state_dict(model.state_dict())
@@ -145,8 +145,8 @@ def auto_resume_helper(output_dir):
 
 def reduce_tensor(tensor, ddp='torch'):
     """
-    在单卡模式下直接返回 tensor，
-    在多卡模式下执行 all_reduce。
+    Return the tensor directly in single-GPU mode.
+    Call all_reduce in multi-GPU mode.
     """
     import torch.distributed as dist
 

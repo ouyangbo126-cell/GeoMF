@@ -134,11 +134,11 @@ def main(config, args):
     model = build_model(config)
     logger.info(str(model))
 
-    # 参数量计算是可靠的
+    # The parameter count is reliable.
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
     logger.info(f"number of params: {n_parameters / 1e6:.2f} M")
 
-    # FLOPs 只能近似，或者不统计
+    # FLOPs are approximate and may be unavailable.
     try:
         params, flops = model.flops_and_params(
             img_shape=(3, 224, 224),
@@ -267,7 +267,7 @@ def main(config, args):
 
         train_one_epoch(config, model, criterion, data_loader_train, optimizer, epoch, mixup_fn, lr_scheduler, loss_scaler, model_ema)
 
-        # 🟩 只验证一次
+        # Run validation once.
         acc1, acc5, loss = validate(config, data_loader_val, model)
         logger.info(f"Accuracy of the network on the {len(dataset_val)} test images: {acc1:.1f}%")
 
@@ -275,7 +275,7 @@ def main(config, args):
             if acc1 > max_accuracy:
                 max_accuracy = acc1
 
-                # 删除旧的 best 权重
+                # Remove the previous best checkpoint.
                 if os.path.isfile(best_checkpoint_path):
                     try:
                         os.remove(best_checkpoint_path)
@@ -283,7 +283,7 @@ def main(config, args):
                     except Exception as e:
                         logger.warning(f"Failed to delete old best checkpoint {best_checkpoint_path}: {e}")
 
-                # 保存新的 best 权重
+                # Save the new best checkpoint.
                 #save_checkpoint_ema(
                 #    config, epoch, model_without_ddp, max_accuracy,
                 #    optimizer, lr_scheduler, loss_scaler, logger,
@@ -333,7 +333,7 @@ def train_one_epoch(config, model, criterion, data_loader, optimizer, epoch, mix
         data_time.update(time.time() - end)
 
         with torch.cuda.amp.autocast(enabled=config.AMP_ENABLE):
-            # 假设你的模型 forward 支持多个输入：input, graph_data_geo, graph_data_pic, metadata
+            # This assumes forward accepts input, graph_data_geo, graph_data_pic, and metadata.
             outputs = model(samples, text, metadata)
 
         loss = criterion(outputs, target)
@@ -464,7 +464,7 @@ if __name__ == '__main__':
     import os, json, random, numpy as np
 
     # ======================================================
-    # ✅ 自动判断是否分布式环境，否则单卡运行
+    # Detect distributed execution and fall back to one GPU.
     # ======================================================
     if all(k in os.environ for k in ['RANK', 'WORLD_SIZE', 'LOCAL_RANK']):
         rank = int(os.environ["RANK"])
@@ -478,13 +478,13 @@ if __name__ == '__main__':
                                 world_size=world_size, rank=rank)
         safe_barrier()
     else:
-        # ✅ 单卡 fallback
+        # Single-GPU fallback
         distributed = False
         rank, world_size, local_rank = 0, 1, 0
         print("⚙️  Running in **single GPU mode** (no distributed environment).")
 
     # ======================================================
-    # ✅ 设置随机种子
+    # Set the random seed.
     # ======================================================
     seed = config.SEED + rank
     torch.manual_seed(seed)
@@ -496,7 +496,7 @@ if __name__ == '__main__':
     cudnn.deterministic = True
 
     # ======================================================
-    # ✅ 学习率线性缩放
+    # Scale the learning rate linearly.
     # ======================================================
     world_size_factor = dist.get_world_size() if distributed else 1
     linear_scaled_lr = config.TRAIN.BASE_LR * config.DATA.BATCH_SIZE * world_size_factor / 512.0
@@ -515,7 +515,7 @@ if __name__ == '__main__':
     config.freeze()
 
     # ======================================================
-    # ✅ 输出路径同步（仅多卡有效）
+    # Synchronize the output path across GPUs.
     # ======================================================
     config.defrost()
     if distributed:
@@ -531,7 +531,7 @@ if __name__ == '__main__':
     os.makedirs(config.OUTPUT, exist_ok=True)
 
     # ======================================================
-    # ✅ 日志创建
+    # Create the logger.
     # ======================================================
     logger = create_logger(output_dir=config.OUTPUT, dist_rank=rank, name=f"{config.MODEL.NAME}")
     if rank == 0:
@@ -544,7 +544,7 @@ if __name__ == '__main__':
     logger.info(json.dumps(vars(args)))
 
     # ======================================================
-    # ✅ GPU 内存限制（可选）
+    # Optionally limit GPU memory usage.
     # ======================================================
     if args.memory_limit_rate > 0 and args.memory_limit_rate < 1:
         torch.cuda.set_per_process_memory_fraction(args.memory_limit_rate)
@@ -552,7 +552,7 @@ if __name__ == '__main__':
         print(f"===========> GPU memory is limited to {usable_memory:.1f} MB", flush=True)
 
     # ======================================================
-    # ✅ 启动主程序
+    # Run the main entry point.
     # ======================================================
     main(config, args)
 

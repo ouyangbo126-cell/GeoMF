@@ -150,7 +150,7 @@ def parse_option():
 def main(config, args):
     dataset_train, dataset_val, data_loader_train, data_loader_val, mixup_fn = build_loader(config)
 
-    # 获取实际的 geo feature 维度（根据 RegionPE 组件配置）
+    # Get the geographic feature dimension from the enabled RegionPE components.
     if hasattr(dataset_train, 'regionpe_config'):
         _, _, _, _, _, actual_input_dim = dataset_train.regionpe_config()
         config.defrost()
@@ -165,11 +165,11 @@ def main(config, args):
         if dist.get_rank() == 0:
             logger.info(str(model))
 
-            # 参数量计算是可靠的
+            # The parameter count is reliable.
             n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
             logger.info(f"number of params: {n_parameters / 1e6:.2f} M")
 
-            # FLOPs 只能近似，或者不统计
+            # FLOPs are approximate and may be unavailable.
             try:
                 params, flops = model.flops_and_params(
                     img_shape=(3, 224, 224),
@@ -247,7 +247,7 @@ def main(config, args):
                 acc1_ema, acc5_ema, loss_ema = validate(config, data_loader_val, model_ema.ema)
                 logger.info(f"Accuracy of the network ema on the {len(dataset_val)} test images: {acc1_ema:.1f}%")
 
-            # 详细推理
+            # Detailed inference
             detailed_results = validate_detailed(config, data_loader_val, model_without_ddp, dataset_val, logger)
             detailed_output_path = os.path.join(config.OUTPUT, "detailed_predictions.json")
             results_to_save = {
@@ -340,7 +340,7 @@ def main(config, args):
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
     logger.info('Training time {}'.format(total_time_str))
 
-    # ========== 详细推理：每张图的预测结果 + per-class accuracy ==========
+    # ========== Detailed inference with per-image predictions and per-class accuracy ==========
     if dist.get_rank() == 0:
         logger.info("\n" + "="*70)
 
@@ -361,9 +361,9 @@ def main(config, args):
         
         detailed_results = validate_detailed(config, data_loader_val, model_without_ddp, dataset_val, logger)
         
-        # 保存详细结果到 JSON
+        # Save the detailed results to JSON.
         detailed_output_path = os.path.join(config.OUTPUT, "detailed_predictions.json")
-        # JSON 不支持 numpy 类型，需要转换
+        # Convert NumPy values to JSON-compatible types.
         results_to_save = {
             'predictions': detailed_results['predictions'],
             'labels': detailed_results['labels'],
@@ -379,7 +379,7 @@ def main(config, args):
             json.dump(results_to_save, f, ensure_ascii=False, indent=2)
         logger.info(f"Detailed predictions saved to: {detailed_output_path}")
         
-        # 打印 4 个 failure cases (sample predictions where pred != label)
+        # Print four misclassified samples.
         logger.info("\n" + "="*70)
         logger.info("Sample Failure Cases (first 10):")
         logger.info("="*70)
@@ -397,7 +397,7 @@ def main(config, args):
         logger.info(f"Total failures shown: {failure_count}")
         logger.info("="*70)
 
-    # 训练结束后删除 checkpoints 以节省磁盘空间
+    # Remove checkpoints after training to save disk space.
     if args.delete_ckpt and dist.get_rank() == 0:
         import glob
         ckpt_dir = config.OUTPUT
@@ -414,13 +414,13 @@ def main(config, args):
         feats, labels = extract_tsne_features(config, model_without_ddp, data_loader_val)
 
         # -----------------------------
-        # TSNE 降维
+        # Reduce dimensionality with t-SNE.
         # -----------------------------
         tsne = TSNE(n_components=2, random_state=42, n_iter=1000, perplexity=30)
         feats_2d = tsne.fit_transform(feats)
 
         # -----------------------------
-        # 颜色配置（深色，固定顺序）
+        # Use a fixed order for the dark color palette.
         # -----------------------------
         num_classes = len(np.unique(labels))
         cmap = plt.cm.get_cmap("nipy_spectral", num_classes)
@@ -432,7 +432,7 @@ def main(config, args):
         colors = [darken_color(cmap(i), 0.8) for i in range(num_classes)]
 
         # -----------------------------
-        # 绘制散点图（正方形，无图例）
+        # Draw a square scatter plot without a legend.
         # -----------------------------
         plt.figure(figsize=(6, 6))
         for i in range(num_classes):
@@ -442,7 +442,7 @@ def main(config, args):
                 feats_2d[idx, 1],
                 s=10,
                 color=colors[i],
-                alpha=0.6,  # 不透明
+                alpha=0.6,  # Use fully opaque points.
             )
 
         plt.axis("equal")
@@ -455,7 +455,7 @@ def main(config, args):
         logger.info(f"[t-SNE] Scatter plot saved to {save_path}")
 
         # -----------------------------
-        # 绘制单独图例
+        # Draw the legend separately.
         # -----------------------------
         legend_path = os.path.join(config.OUTPUT, "tsne_legend.png")
         plt.figure(figsize=(12, 3))
@@ -494,11 +494,11 @@ def main(config, args):
         cm = confusion_matrix(all_labels, all_preds)
         num_classes = cm.shape[0]
 
-        # 归一化并转整数百分比
+        # Normalize and convert to whole percentages.
         cm_norm = cm.astype("float") / cm.sum(axis=1, keepdims=True)
         cm_percent = np.nan_to_num(cm_norm * 100).round(0).astype(int)
 
-        # 绘制高清混淆矩阵（论文白底蓝色版）
+        # Draw a high-resolution confusion matrix with a white background and blue shading.
         fig, ax = plt.subplots(figsize=(7, 7), dpi=600)
         im = ax.imshow(cm_percent, interpolation="nearest", cmap="Blues", aspect="equal")
         ax.set_facecolor("white")
@@ -506,23 +506,23 @@ def main(config, args):
         ax.set_xlabel("Predicted Label", fontsize=12)
         ax.set_ylabel("True Label", fontsize=12)
 
-        # 横纵坐标
+        # Set the axis labels.
         ax.set_xticks(range(num_classes))
         ax.set_xticklabels(range(num_classes), rotation=45, ha="center", fontsize=4)
         ax.set_yticks(range(num_classes))
         ax.set_yticklabels(range(num_classes), fontsize=4)
         ax.tick_params(axis="both", which="major", length=0)
 
-        # 添加细网格线
+        # Add fine grid lines.
         ax.set_xticks(np.arange(-0.5, num_classes, 1), minor=True)
         ax.set_yticks(np.arange(-0.5, num_classes, 1), minor=True)
         ax.grid(which="minor", color="lightgray", linestyle='-', linewidth=0.4)
         ax.tick_params(which="minor", bottom=False, left=False)
 
-        # 计算动态字体大小，保证数值在格子内
+        # Scale the font so each value fits inside its cell.
         font_size = 3
 
-        # 在每个格子中写入百分比值（0不显示）
+        # Annotate cells with nonzero percentages.
         for i in range(num_classes):
             for j in range(num_classes):
                 value = cm_percent[i, j]
@@ -544,7 +544,7 @@ def main(config, args):
         plt.close()
         logger.info(f"[Confusion Matrix] Paper-quality figure saved to {save_path}")
 
-        # 绘制颜色条
+        # Draw the color bar.
         legend_path = os.path.join(config.OUTPUT, "confusion_colorbar_paper.png")
         fig, ax = plt.subplots(figsize=(5, 0.4), dpi=600)
         norm = plt.Normalize(vmin=0, vmax=100)
@@ -558,18 +558,18 @@ def main(config, args):
 
 def extract_tsne_features(config, model, data_loader, steps=0, device="cuda"):
     """
-    提取用于 t-SNE 可视化的特征和标签（支持多模态融合模型）
+    Extract multimodal features and labels for t-SNE visualization.
 
     Args:
-        config: 配置参数（可用于扩展）
-        model: 已训练好的模型
-        data_loader: DataLoader，返回 (samples, text, targets, metadata)
-        steps: 起始步数（多卡/断点训练时可用）
-        device: 运行设备，默认 'cuda'
+        config: Configuration parameters available for extensions.
+        model: Trained model.
+        data_loader: DataLoader that yields (samples, text, targets, metadata).
+        steps: Starting step for distributed or resumed training.
+        device: Execution device. Defaults to 'cuda'.
 
     Returns:
-        all_features (ndarray): 所有特征，shape = [N, D]
-        all_labels (ndarray): 对应标签，shape = [N]
+        all_features (ndarray): All features of shape [N, D].
+        all_labels (ndarray): Corresponding labels of shape [N].
     """
     model.eval()
     all_features, all_labels = [], []
@@ -577,16 +577,16 @@ def extract_tsne_features(config, model, data_loader, steps=0, device="cuda"):
 
     with torch.no_grad():
         for idx, (samples, text, targets, metadata) in enumerate(data_loader, start=steps):
-            # 统一类型并移动到设备
+            # Convert to a common dtype and move to the device.
             samples = samples.to(device, non_blocking=True)
             text = text.to(device, non_blocking=True)
             targets = targets.long().to(device, non_blocking=True)
             metadata = metadata.to(device, non_blocking=True)
 
-            # 提取 fusion 层特征
+            # Extract features from the fusion layer.
             feats = model(samples, text, metadata, return_features=True)
 
-            # 检查 batch 是否完整
+            # Check that the batch is complete.
             if feats.size(0) != targets.size(0):
                 raise ValueError(
                     f"Batch {idx}: 特征数量 {feats.size(0)} != 标签数量 {targets.size(0)}"
@@ -596,11 +596,11 @@ def extract_tsne_features(config, model, data_loader, steps=0, device="cuda"):
             all_labels.append(targets.cpu())
             label_counter.update(targets.cpu().numpy().tolist())
 
-    # 拼接所有 batch
+    # Concatenate all batches.
     all_features = torch.cat(all_features, dim=0).numpy()
     all_labels = torch.cat(all_labels, dim=0).numpy()
 
-    # 打印类别统计
+    # Print class statistics.
     print("每类样本数量:", dict(label_counter))
     print("总样本数:", all_features.shape[0])
     print("覆盖类别数:", len(label_counter))

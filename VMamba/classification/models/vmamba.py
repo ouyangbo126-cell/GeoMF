@@ -1374,7 +1374,7 @@ class GeoMFVMamba(nn.Module):
             nn.Linear(128, 256),
             nn.GELU(),
             nn.Dropout(0.0),
-            nn.Linear(256, 256),   # 输出 256
+            nn.Linear(256, 256),   # Output dimension: 256
             nn.LayerNorm(256),
         )
         # Preserve module keys used in existing checkpoints.
@@ -1382,7 +1382,7 @@ class GeoMFVMamba(nn.Module):
             hidden_dim=256,
             num_nodes=25,
             num_iters=5,
-            num_classes=60,   # 输出 256
+            num_classes=60,   # Output dimension: 256
             gnn_type=TransformerConv,
             edge_index=None
         )
@@ -1416,15 +1416,15 @@ class GeoMFVMamba(nn.Module):
             for _ in range(2)
         ])
         if not self.channel_first:
-            # 如果输入是 [B,H,W,C]，使用 LayerNorm
+            # Use LayerNorm when the input shape is [B, H, W, C].
             self.norm = norm_layer(self.num_features)  # LayerNorm(num_features)
-            # 需要在 forward 里 permute 到 [B,C,H,W]
+            # Permute to [B, C, H, W] in forward.
             self.permute = Permute(0, 3, 1, 2)
         else:
             self.norm = norm_layer(self.num_features)
             self.permute = nn.Identity()
 
-        # 2️⃣ 全局池化
+        # Global pooling
         self.avgpool = nn.AdaptiveAvgPool2d(1)
 
         # 3️⃣ Flatten
@@ -1616,7 +1616,7 @@ class GeoMFVMamba(nn.Module):
         #gasc
         '''mu_prime = torch.sigmoid(self.mu_param)
 
-        # 按 μ' 融合图像与元特征
+        # Blend image and metadata features with mu_prime.
         mix_feat = torch.cat([
             mu_prime * x,
             (1 - mu_prime) * metadata_2
@@ -1645,14 +1645,14 @@ class GeoMFVMamba(nn.Module):
                      log_dir="./",
                      verbose=True):
         """
-        计算多模态模型参数量 (Params) 和 FLOPs
-        - fvcore：支持复杂模型（推荐）
-        - ptflops：对 CNN/Transformer 更精确，但只支持单模态
+        Count parameters and estimate FLOPs for the multimodal model.
+        - fvcore supports complex models and is the recommended option.
+        - ptflops gives more precise CNN and Transformer estimates for single-modality models.
         """
 
         model = model.eval().to(device)
 
-        # -------- 参数量 --------
+        # -------- Parameter count --------
         params = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
         # -------- FLOPs --------
@@ -1661,7 +1661,7 @@ class GeoMFVMamba(nn.Module):
 
         if not use_ptflops:
             try:
-                # 包一层 Wrapper，给模型自动加 dummy meta/text 输入
+                # Wrap the model to supply dummy metadata and text inputs.
                 class Wrapper(torch.nn.Module):
                     def __init__(self, model):
                         super().__init__()
@@ -1679,7 +1679,7 @@ class GeoMFVMamba(nn.Module):
                 flops_analyzer = FlopCountAnalysis(wrapped_model, dummy_img)
                 flops = flops_analyzer.total()
 
-                # 打印 per-op 统计，方便定位算力消耗
+                # Print per-operator statistics to identify expensive operations.
                 if verbose:
                     print(flops_analyzer)
 
@@ -1695,7 +1695,7 @@ class GeoMFVMamba(nn.Module):
                 flops = 1e9
 
         else:
-            # 用 ptflops 更精确（对 CNN + Transformer 支持更好，但只支持单模态输入）
+            # ptflops gives more precise CNN and Transformer estimates for single-modality inputs.
             with torch.cuda.device(0):
                 macs, params_str = get_model_complexity_info(
                     model,
@@ -1707,12 +1707,12 @@ class GeoMFVMamba(nn.Module):
                 flops = macs  # MACs≈FLOPs
                 params = params_str
 
-        # -------- 输出 --------
+        # -------- Output --------
         if verbose:
             print(f"Params: {params/1e6:.2f} M")
             print(f"FLOPs: {flops/1e9:.2f} G (approx)")
 
-        # -------- 保存日志 --------
+        # -------- Save the log --------
         if warning_lines:
             os.makedirs(log_dir, exist_ok=True)
             log_path = os.path.join(log_dir, "flops_log.txt")

@@ -114,7 +114,7 @@ def build_dataset(is_train, config):
                 root = os.path.join(config.DATA.DATA_PATH, prefix)
                 dataset = datasets.ImageFolder(root, transform=transform)
 
-                # 获取实际的类别数
+                # Get the actual number of classes.
                 if hasattr(dataset, 'class_to_idx'):
                     nb_classes = len(dataset.class_to_idx)
                     print(f"[INFO] Dataset classes: {nb_classes} (from ImageFolder)")
@@ -137,7 +137,7 @@ def build_dataset(is_train, config):
 
 # =============================================================================
 
-        # 兜底：如果 nb_classes 未定义，使用默认值 60
+        # Fall back to 60 classes if nb_classes is undefined.
         try:
             _ = nb_classes
         except NameError:

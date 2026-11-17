@@ -6,7 +6,7 @@ from PIL import Image
 import math
 import torch
 from torch.utils.data import Dataset
-import ast  # 用于安全地解析字符串为列表
+import ast  # Safely parse the string as a list.
 
 
 class GeoShipDataset(Dataset):
@@ -35,17 +35,17 @@ class GeoShipDataset(Dataset):
     def __getitem__(self, idx):
         img_path, filename, label, metadata = self.samples[idx]
 
-        # 图像加载与 transform
+        # Load and transform the image.
         img = Image.open(img_path).convert("RGB")
         if self.transform:
             img = self.transform(img)
 
         key = os.path.splitext(os.path.basename(filename))[0]
-        text = self.feature_dict.get(key, torch.zeros(19))  # 改为长度 19 的默认向量
+        text = self.feature_dict.get(key, torch.zeros(19))  # Use a 19-element default vector.
         return img, text, label, metadata
 
 
-    # ------------- 辅助函数 -------------
+    # ------------- Helper functions -------------
     def _load_feature_dict(self, path):
         feature_dict = {}
         if not os.path.exists(path):
@@ -60,7 +60,7 @@ class GeoShipDataset(Dataset):
                     feature = torch.tensor(feature_list, dtype=torch.float)
                     #print("before feature shape:", feature.shape)
                     #print("feature:", feature)
-                    feature[-6:] = 0#删去最后的top3s
+                    feature[-6:] = 0  # Zero out the trailing top-three entries.
                     #feature[11] = 0  # surrounding_facilities
                     #feature[12] = 0  # port
                     #print("after feature shape:", feature.shape)
@@ -249,7 +249,7 @@ class GeoShipDataset(Dataset):
 
         geo_feature = [coarse_sin, coarse_cos]
 
-        # 多层细粒度编码（lat/lon）
+        # Multiscale fine encoding for latitude and longitude
         k = 0.1
         for _ in range(3):
             fine_lat = (lat % k) / k
@@ -259,15 +259,15 @@ class GeoShipDataset(Dataset):
             fine_cos = torch.cos(torch.pi * fine_tensor)
             geo_feature.append(fine_sin)
             geo_feature.append(fine_cos)
-            k *= 10 # 细粒度更小
+            k *= 10 # Use a finer scale.
 
-        # 差值部分（lat/lon 与 port 之间的差值）
+        # Difference between the ship and port coordinates
         lat_diff = lat - port_lat
         lon_diff = lon - port_lon
         omega = 0.01
 
         diff_feature = []
-        for _ in range(1):  # 多层 omega 差值编码
+        for _ in range(1):  # Encode differences at multiple omega scales.
             lat_diff_norm = (lat_diff % omega) / omega
             lon_diff_norm = (lon_diff % omega) / omega
             diff_tensor = torch.tensor([lat_diff_norm, lon_diff_norm], dtype=torch.float32)
@@ -278,7 +278,7 @@ class GeoShipDataset(Dataset):
             omega *= omega
 
         geo_feature.extend(diff_feature)
-        # ✅ 新增：加入距离特征（单位 km）
+        # Add the distance feature in kilometers.
         distance_km = self.haversine_distance(lat, lon, port_lat, port_lon)
         distance_km = torch.tensor(distance_km/100, dtype=torch.float32)
         distance_sin = torch.sin(torch.pi * distance_km)
@@ -286,7 +286,7 @@ class GeoShipDataset(Dataset):
         distance_tensor = torch.tensor([distance_sin, distance_cos], dtype=torch.float32)
         geo_feature.append(distance_tensor)
 
-        # 方位角方向向量
+        # Bearing direction vector
         bearing_deg = self.compute_bearing(port_lat, port_lon, lat, lon)
         bearing_rad = math.radians(bearing_deg)
         dir_vec = torch.tensor([math.sin(bearing_rad), math.cos(bearing_rad)], dtype=torch.float32)
@@ -297,8 +297,8 @@ class GeoShipDataset(Dataset):
 
     def compute_bearing(self, lat1, lon1, lat2, lon2):
         """
-        计算从 (lat1, lon1) 到 (lat2, lon2) 的方位角（bearing）
-        返回角度（度），范围为 [0, 360)
+        Compute the bearing from (lat1, lon1) to (lat2, lon2).
+        Return an angle in degrees in the range [0, 360).
         """
         lat1_rad = math.radians(lat1)
         lat2_rad = math.radians(lat2)
@@ -313,7 +313,7 @@ class GeoShipDataset(Dataset):
         return brng_deg
 
     def haversine_distance(self, lat1, lon1, lat2, lon2):
-        R = 6371.0  # 地球半径，单位 km
+        R = 6371.0  # Earth radius in kilometers
         phi1 = math.radians(lat1)
         phi2 = math.radians(lat2)
         d_phi = math.radians(lat2 - lat1)
